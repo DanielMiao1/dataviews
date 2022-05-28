@@ -118,7 +118,7 @@ class TopBar(QGroupBox):
 			super(TopBar.SettingsButton, self).leaveEvent(event)
 		
 		def mousePressEvent(self, event) -> None:
-			QApplication.quit()
+			application.activeWindow().enterSettings()
 			super(TopBar.SettingsButton, self).mousePressEvent(event)
 		
 		def updateColor(self, color: QColor):
@@ -174,15 +174,117 @@ class Clock(Widget):
 		super(Clock, self).resizeEvent(event)
 
 
+class SettingsButton(QSvgWidget):
+	def __init__(self, parent, xml, action):
+		super(SettingsButton, self).__init__(parent=parent)
+		self.setFixedSize(QSize(25, 25))
+		self.xml = xml
+		self.action = action
+		self.animation = None
+		self.updateColor(QColor("black"))
+		self.setCursor(Qt.CursorShape.PointingHandCursor)
+		self.hide()
+		
+	def updateColor(self, color: QColor):
+		self.renderer().load(bytearray(self.xml % ((color.name(),) * self.xml.count("%s")), encoding="utf-8"))
+	
+	def enterEvent(self, event) -> None:
+		self.animation = QPropertyAnimation(self, b"color")
+		self.animation.setStartValue(QColor("black"))
+		self.animation.setEndValue(QColor("#383838"))
+		self.animation.setDuration(200)
+		self.animation.start()
+		super(SettingsButton, self).enterEvent(event)
+
+	def leaveEvent(self, event) -> None:
+		self.animation = QPropertyAnimation(self, b"color")
+		self.animation.setStartValue(QColor("#383838"))
+		self.animation.setEndValue(QColor("black"))
+		self.animation.setDuration(200)
+		self.animation.start()
+		super(SettingsButton, self).leaveEvent(event)
+	
+	def mousePressEvent(self, event) -> None:
+		self.action()
+		self.animation = QPropertyAnimation(self, b"color")
+		self.animation.setStartValue(QColor("#383838"))
+		self.animation.setEndValue(QColor("#555"))
+		self.animation.setDuration(200)
+		self.animation.start()
+		super(SettingsButton, self).mousePressEvent(event)
+
+	def mouseReleaseEvent(self, event) -> None:
+		self.animation = QPropertyAnimation(self, b"color")
+		self.animation.setStartValue(QColor("#555"))
+		self.animation.setEndValue(QColor("#383838"))
+		self.animation.setDuration(200)
+		self.animation.start()
+		super(SettingsButton, self).mouseReleaseEvent(event)
+	
+	color = pyqtProperty(QColor, fset=updateColor)
+
+
 class Window(QMainWindow):
 	def __init__(self):
 		super(Window, self).__init__(flags=Qt.FramelessWindowHint)
 		self.setMinimumSize(QSize(200, 200))
+		self.moved = False
 		self.setAttribute(Qt.WA_TranslucentBackground)
 		self.main_wrapper = QWidget(self)
 		self.top_bar = TopBar(self)
 		self.top_bar.hide()
 		self.clock = Clock(self.main_wrapper)
+		self.settings_overlay = QPushButton(self)
+		self.settings_overlay.setStyleSheet("QPushButton { border: none; background-color: rgba(255, 255, 255, 0.5); }")
+		self.settings_overlay.hide()
+		self.settings_buttons = {
+			# <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+			# <svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" fill="currentColor">
+			# 	<polygon points="0, 0 0, 1 1, 0" fill="black"/>
+			# </svg>
+			"position_top_left": SettingsButton(self.settings_overlay, '<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" fill="currentColor"><path fill="%s" d="M0 0v1l1-1z"/></svg>', lambda: self.moveWindow("position_top_left")),
+			# <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+			# <svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" fill="currentColor">
+			# 	<rect x="0" y="0" width="0.25" height="1"/>
+			# </svg>
+			"position_left": SettingsButton(self.settings_overlay, '<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" fill="currentColor"><path fill="%s" d="M0 0h.25v1H0z"/></svg>', lambda: self.moveWindow("position_left")),
+			# <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+			# <svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" fill="currentColor">
+			# 	<polygon points="0, 0 0, 1 1, 1" fill="black"/>
+			# </svg>
+			"position_bottom_left": SettingsButton(self.settings_overlay, '<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" fill="currentColor"><path fill="%s" d="M0 0v1h1z"/></svg>', lambda: self.moveWindow("position_bottom_left")),
+			# <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+			# <svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" fill="currentColor">
+			# 	<rect x="0" y="0" width="1" height="0.25"/>
+			# </svg>
+			"position_top": SettingsButton(self.settings_overlay, '<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" fill="currentColor"><path fill="%s" d="M0 0h1v.25H0z"/></svg>', lambda: self.moveWindow("position_top")),
+			# <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+			# <svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" fill="currentColor">
+			# 	<polygon points="0, 0 1, 0 1, 1"/>
+			# </svg>
+			"position_top_right": SettingsButton(self.settings_overlay, '<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" fill="currentColor"><path fill="%s" d="M0 0h1v1z"/></svg>', lambda: self.moveWindow("position_top_right")),
+			# <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+			# <svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" fill="currentColor">
+			# 	<rect x="0" y="0" width="1" height="0.25"/>
+			# </svg>
+			"position_right": SettingsButton(self.settings_overlay, '<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" fill="currentColor"><path fill="%s" d="M.75 0H1v1H.75z"/></svg>', lambda: self.moveWindow("position_right")),
+			# <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+			# <svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" fill="currentColor">
+			# 	<polygon points="0, 1 1, 1 1, 0"/>
+			# </svg>
+			"position_bottom_right": SettingsButton(self.settings_overlay, '<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" fill="currentColor"><path fill="%s" d="M0 1h1V0z"/></svg>', lambda: self.moveWindow("position_bottom_right")),
+			# <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+			# <svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" fill="currentColor">
+			# 	<rect x="0" y="0.75" width="1" height="0.25"/>
+			# </svg>
+			"position_bottom": SettingsButton(self.settings_overlay, '<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" fill="currentColor"><path fill="%s" d="M0 .75h1V1H0z"/></svg>', lambda: self.moveWindow("position_bottom")),
+		}
+		self.exit_settings = QPushButton("Exit", self.settings_overlay)
+		self.exit_settings.setCursor(Qt.CursorShape.PointingHandCursor)
+		self.exit_settings.setStyleSheet("background-color: transparent; border: none;")
+		self.exit_settings.setFont(QFont(barlow_condensed_black, 20))
+		self.exit_settings.clicked.connect(self.exitSettings)
+		self.exit_settings.hide()
 		self.show()
 		self.leaveEvent = lambda event: super(Window, self).leaveEvent(event)
 	
@@ -190,25 +292,71 @@ class Window(QMainWindow):
 		self.main_wrapper.resize(event.size())
 		self.top_bar.resize(QSize(event.size().width(), 25))
 		self.clock.resize(QSize(event.size().width(), self.clock.height()))
+		self.settings_overlay.resize(event.size())
+		for name, button in self.settings_buttons.items():
+			button.move({
+				"position_top_left": QPoint(),
+				"position_left": QPoint(0, (event.size().height() - button.height()) // 2),
+				"position_bottom_left": QPoint(0, event.size().height() - button.height()),
+				"position_top": QPoint((event.size().width() - button.width()) // 2, 0),
+				"position_top_right": QPoint(event.size().width() - button.width(), 0),
+				"position_right": QPoint(event.size().width() - button.width(), (event.size().height() - button.height()) // 2),
+				"position_bottom_right": QPoint(event.size().width() - button.width(), event.size().height() - button.height()),
+				"position_bottom": QPoint((event.size().width() - button.width()) // 2, event.size().height() - button.height()),
+			}[name])
+		self.exit_settings.move(QPoint((event.size().width() - self.exit_settings.width()) // 2, (event.size().height() - self.exit_settings.height()) // 2))
 		super(Window, self).resizeEvent(event)
 	
 	def enterEvent(self, event):
 		self.top_bar.show()
 		self.resize(QSize(self.width(), self.height() + self.top_bar.height() + 10))
+		if self.y() >= self.top_bar.height() + 10:
+			self.move(self.x(), self.y() - self.top_bar.height() - 10)
+			self.moved = True
 		self.main_wrapper.move(QPoint(0, self.top_bar.height() + 10))
+		self.exit_settings.move(QPoint((self.width() - self.exit_settings.width()) // 2, (self.height() - self.exit_settings.height()) // 2))
 
 		def leaveEvent(event_):
 			self.top_bar.hide()
-			self.resize(QSize(self.width(), self.height() - self.top_bar.height()))
+			self.resize(QSize(self.width(), self.height() - self.top_bar.height() - 10))
 			self.main_wrapper.move(QPoint(0, 0))
+			if self.moved:
+				self.move(self.x(), self.y() + self.top_bar.height() + 10)
+				self.moved = False
 			super(Window, self).leaveEvent(event_)
 
 		self.leaveEvent = leaveEvent
 		super(Window, self).enterEvent(event)
+	
+	def enterSettings(self):
+		self.settings_overlay.show()
+		for button in self.settings_buttons.values():
+			button.show()
+		self.exit_settings.show()
+
+	def exitSettings(self):
+		self.settings_overlay.hide()
+		for button in self.settings_buttons.values():
+			button.hide()
+		self.exit_settings.hide()
+	
+	def moveWindow(self, position):
+		self.move(QPoint(*{
+			"position_top_left": (0, 0),
+			"position_left": (0, (screen_geometry.height() - self.height()) // 2),
+			"position_bottom_left": (0, screen_geometry.height() - self.height()),
+			"position_top": ((screen_geometry.width() - self.width()) // 2, 0),
+			"position_top_right": (screen_geometry.width() - self.width(), 0),
+			"position_right": (screen_geometry.width() - self.width(), (screen_geometry.height() - self.height()) // 2),
+			"position_bottom_right": (screen_geometry.width() - self.width(), screen_geometry.height() - self.height()),
+			"position_bottom": ((screen_geometry.width() - self.width()) // 2, screen_geometry.height() - self.height()),
+		}[position]))
 
 
 application = QApplication([])
 bebas_neue = QFontDatabase.applicationFontFamilies(QFontDatabase.addApplicationFont(QDir.currentPath() + "/fonts/Bebas_Neue/BebasNeue-Regular.ttf"))[0]
 barlow_condensed = QFontDatabase.applicationFontFamilies(QFontDatabase.addApplicationFont(QDir.currentPath() + "/fonts/Barlow_Condensed/BarlowCondensed-SemiBold.ttf"))[0]
+barlow_condensed_black = QFontDatabase.applicationFontFamilies(QFontDatabase.addApplicationFont(QDir.currentPath() + "/fonts/Barlow_Condensed/BarlowCondensed-Black.ttf"))[0]
+screen_geometry = application.desktop().screenGeometry()
 window = Window()
 application.exec_()
